@@ -42,7 +42,7 @@ static uint32_t angleToPulseTicks(int32_t angle_deg)
  */
 void vServoTask(void *pvParameters)
 {
-	uint32_t* servo_ticks_up = (uint32_t*) pvParameters;
+	volatile uint32_t* servo_ticks_up = (volatile uint32_t*) pvParameters;
 
 	assert(servo_ticks_up != NULL);
 

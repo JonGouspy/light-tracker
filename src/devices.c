@@ -24,9 +24,6 @@ LTDC_HandleTypeDef LtdcHandle;
 
 __IO uint32_t Pending = 0;
 
-static volatile uint32_t servoPulse = (SERVO_PULSE_MIN_US + SERVO_PULSE_MAX_US) / 2;
-static bool servoHigh = false;
-
 /* ******************************************************
  *      Display
  * ******************************************************/
@@ -107,68 +104,6 @@ void Servo_Init(void)
     HAL_GPIO_WritePin(SERVO_GPIO_PORT, SERVO_PIN, GPIO_PIN_RESET);
 }
 
-/**
- * @brief  Sets the servo signal pin high.
- * @retval None
- */
-void Servo_On(void)
-{
-    HAL_GPIO_WritePin(SERVO_GPIO_PORT, SERVO_PIN, GPIO_PIN_SET);
-}
-
-/**
- * @brief  Sets the servo signal pin low.
- * @retval None
- */
-void Servo_Off(void)
-{
-    HAL_GPIO_WritePin(SERVO_GPIO_PORT, SERVO_PIN, GPIO_PIN_RESET);
-}
-
-/**
- * @brief  Inverts the servo signal pin.
- * @retval None
- */
-void Servo_Toggle(void)
-{
-    HAL_GPIO_TogglePin(SERVO_GPIO_PORT, SERVO_PIN);
-}
-
-/**
- * @brief  Sets the servo position through the pulse width, clamped to the allowed range.
- * @param  pulse_us: pulse width in microseconds (SERVO_PULSE_MIN_US..SERVO_PULSE_MAX_US)
- * @retval None
- */
-void Servo_SetPulse(uint32_t pulse_us)
-{
-    if (pulse_us < SERVO_PULSE_MIN_US) pulse_us = SERVO_PULSE_MIN_US;
-    if (pulse_us > SERVO_PULSE_MAX_US) pulse_us = SERVO_PULSE_MAX_US;
-    servoPulse = pulse_us;
-}
-
-/**
- * @brief  Called on each TIM7 update event: raises the pin for the pulse width,
- *         then lowers it for the rest of the 20 ms frame (timer ticks at 1 MHz).
- * @retval None
- */
-void Servo_TimerUpdate(void)
-{
-    uint32_t pulse = servoPulse;
-
-    if (servoHigh)
-    {
-        Servo_Off();
-        servoHigh = false;
-        __HAL_TIM_SET_AUTORELOAD(&gServoTimHandle, SERVO_PERIOD_US - pulse - 1);
-    }
-    else
-    {
-        Servo_On();
-        servoHigh = true;
-        __HAL_TIM_SET_AUTORELOAD(&gServoTimHandle, pulse - 1);
-    }
-}
-
 /* ******************************************************
  *      Initialization
  * ******************************************************/
@@ -184,43 +119,18 @@ void initGPIO(void)
 }
 
 /**
- * @brief  Initializes and configures the servo timer.
- *              Instance    : TIM7 (timer clock 90 MHz)
- *              Tick        : 1 us (prescaler 90)
- *              Period      : one frame, the first event comes after SERVO_PERIOD_US
- *              IT          : Enabled (two events per 20 ms frame)
- * @retval None
- */
-void initServoTimer(void)
-{
-    __HAL_RCC_TIM7_CLK_ENABLE();
-
-    gServoTimHandle.Instance = TIM7;
-    gServoTimHandle.Init.Prescaler = 90 - 1;
-    gServoTimHandle.Init.Period = SERVO_PERIOD_US - 1;
-    gServoTimHandle.Init.CounterMode = TIM_COUNTERMODE_UP;
-    gServoTimHandle.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-    HAL_TIM_Base_Init(&gServoTimHandle);
-
-    HAL_NVIC_SetPriority(TIM7_IRQn, 1, 0);
-    HAL_NVIC_EnableIRQ(TIM7_IRQn);
-
-    HAL_TIM_Base_Start_IT(&gServoTimHandle);
-}
-
-/**
  * @brief  Initializes and configures the ADC.
  *              Instance    : ADC1
  *              GPIO        : C1 (channel 11, left), A5 (channel 5, right), analog inputs
- *              Mode        : scan of 2 channels, continuous, software start, no DMA
+ *              Mode        : 2 injected channels, software start, no DMA
  *              Clock       : PCLK2 / 8
- *              IT          : Enabled (one interrupt per conversion)
+ *              IT          : Enabled (one interrupt per injected sequence)
  * @retval None
  */
 void initADC(void)
 {
     GPIO_InitTypeDef GPIO_InitStruct = { 0 };
-    ADC_ChannelConfTypeDef ADC_ChannelStruct = { 0 };
+    ADC_InjectionConfTypeDef inj = { 0 };
 
     __GPIOA_CLK_ENABLE();
     __GPIOC_CLK_ENABLE();
@@ -240,35 +150,39 @@ void initADC(void)
     gAdcHandle.Init.ClockPrescaler = ADC_CLOCKPRESCALER_PCLK_DIV8;
     gAdcHandle.Init.Resolution = ADC_RESOLUTION_12B;
     gAdcHandle.Init.ScanConvMode = ENABLE;
-    gAdcHandle.Init.ContinuousConvMode = ENABLE;
+    gAdcHandle.Init.ContinuousConvMode = DISABLE;
     gAdcHandle.Init.DiscontinuousConvMode = DISABLE;
     gAdcHandle.Init.NbrOfDiscConversion = 0;
     gAdcHandle.Init.ExternalTrigConv = ADC_EXTERNALTRIGCONV_T2_TRGO;
     gAdcHandle.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
     gAdcHandle.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-    gAdcHandle.Init.NbrOfConversion = 2;
+    gAdcHandle.Init.NbrOfConversion = 1;
     gAdcHandle.Init.DMAContinuousRequests = DISABLE;
     gAdcHandle.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
     HAL_ADC_Init(&gAdcHandle);
 
-    ADC_ChannelStruct.Channel = ADC_CHANNEL_11;
-    ADC_ChannelStruct.SamplingTime = ADC_SAMPLETIME_480CYCLES;
-    ADC_ChannelStruct.Rank = 1;
-    ADC_ChannelStruct.Offset = 0;
-    HAL_ADC_ConfigChannel(&gAdcHandle, &ADC_ChannelStruct);
+    inj.InjectedNbrOfConversion = 2;
+    inj.InjectedSamplingTime = ADC_SAMPLETIME_480CYCLES;
+    inj.InjectedOffset = 0;
+    inj.InjectedDiscontinuousConvMode = DISABLE;
+    inj.AutoInjectedConv = DISABLE;
+    inj.ExternalTrigInjecConv = ADC_INJECTED_SOFTWARE_START;
+    inj.ExternalTrigInjecConvEdge = ADC_EXTERNALTRIGINJECCONVEDGE_NONE;
 
-    ADC_ChannelStruct.Channel = ADC_CHANNEL_5;
-    ADC_ChannelStruct.Rank = 2;
-    HAL_ADC_ConfigChannel(&gAdcHandle, &ADC_ChannelStruct);
+    inj.InjectedChannel = ADC_CHANNEL_11;
+    inj.InjectedRank = ADC_INJECTED_RANK_1;
+    HAL_ADCEx_InjectedConfigChannel(&gAdcHandle, &inj);
 
-    HAL_ADC_Start_IT(&gAdcHandle);
+    inj.InjectedChannel = ADC_CHANNEL_5;
+    inj.InjectedRank = ADC_INJECTED_RANK_2;
+    HAL_ADCEx_InjectedConfigChannel(&gAdcHandle, &inj);
 }
 
 /**
  * @brief  Initializes and configures the timer.
  *              Instance    : TIM2 (timer clock 90 MHz)
- *              Tick        : 45 MHz (prescaler 2)
- *              Period      : 1000 ticks
+ *              Tick        : 100 kHz, 10 us (prescaler 0)
+ *              Period      : 900 ticks
  *              IT          : Enabled
  * @retval None
  */
@@ -277,8 +191,8 @@ void initTimer(void)
     __TIM2_CLK_ENABLE();
 
     gTimHandle.Instance = TIM2;
-    gTimHandle.Init.Period = 1000 - 1;
-    gTimHandle.Init.Prescaler = (90000000 / 40000000) - 1;
+    gTimHandle.Init.Period = 900 - 1;
+    gTimHandle.Init.Prescaler = 0;
     gTimHandle.Init.CounterMode = TIM_COUNTERMODE_UP;
     gTimHandle.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
     gTimHandle.Init.RepetitionCounter = 0;

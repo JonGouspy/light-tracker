@@ -53,3 +53,21 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+# STM32CubeIDE / Eclipse build output (regenere par l'IDE)
+/Debug/
+/Release/
+*.list
+*.bin
+*.srec
+*.launch.bak
+
+# Eclipse metadata locale (on garde .project, .cproject et .settings/)
+.metadata/
+.sc_cache/
+RemoteSystemsTempFiles/
+
+# OS / editeur
+Thumbs.db
+.DS_Store
+*.swp

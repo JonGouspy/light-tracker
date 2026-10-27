@@ -1,64 +1,78 @@
+/*
+ * main.c
+ *
+ */
 
-#include <stdbool.h>
+/* Board */
 #include "stm32f4xx.h"
 #include "stm32f429i_discovery.h"
-#include "../Components/ili9341/ili9341.h"
+
+/* FreeRTOS */
+#include "FreeRTOS.h"
+#include "task.h"
+#include "queue.h"
+
+/* Project */
+#include "automaton.h"
 #include "devices.h"
+#include "display.h"
+#include "event.h"
 #include "main.h"
+#include "servo.h"
+
+/* ******************************************************
+ *      Settings
+ * ******************************************************/
+
+#define PRIO_HIGH   (tskIDLE_PRIORITY + 3)
+#define PRIO_MID    (tskIDLE_PRIORITY + 2)
+#define PRIO_LOW    (tskIDLE_PRIORITY + 1)
 
 /* ******************************************************
  *      Global Context
  * ******************************************************/
+
 int cycle = 0;
 int nbTIM2 = 0;
+
+/* Pulse width in timer ticks: written by Servo, decremented by TIM2 */
+static uint32_t servo_ticks_up = 0;
 
 /* ******************************************************
  *      Entry Point
  * ******************************************************/
 
+/**
+ * @brief  Initializes the devices and the display, creates the queues and the
+ *         tasks (Servo, Automaton, Display), then starts the scheduler.
+ * @retval never returns
+ */
 int main(void)
 {
-    /* Timer information */
-    char msg[20] = {0};
-    int prevTIM2 = 0;
-    int TimFreq = 0;
+    setup();
+    LCDdisplayInit(COLORS_NORMAL);
 
-    bool toggled = false;
-    uint32_t back_color = LCD_COLOR_LIGHTGRAY;
-    uint32_t text_color = LCD_COLOR_BLACK;
+    gAutomaton.mq_display = xQueueCreate(MQ_DISPLAY_LENGTH, sizeof(DisplayMsg));
+    gAutomaton.mq_event = xQueueCreate(MQ_EVENT_LENGTH, sizeof(Event));
+    gAutomaton.target_angle = 0;
 
-    setup();                        // init devices
+    xTaskCreate(vServoTask, "Servo", 128, &servo_ticks_up, PRIO_HIGH, NULL);
+    xTaskCreate(vAutomatonTask, "Automaton", 512, NULL, PRIO_MID, NULL);
+    xTaskCreate(vDisplayTask, "Display", 512, NULL, PRIO_LOW, NULL);
 
-    LCDdisplayInit(COLORS_NORMAL);  // init display
+    vTaskStartScheduler();
 
-    for( ;; )
-    {
-        if (BSP_PB_GetState(BUTTON_KEY) != 0)
-        {
-            toggled = !toggled;
-            BSP_LED_Toggle(LED3);
-            LCDdisplayInit(toggled ? COLORS_REVERSE : COLORS_NORMAL);
-            back_color = toggled ? LCD_COLOR_DARKGRAY : LCD_COLOR_LIGHTGRAY;
-            text_color = toggled ? LCD_COLOR_WHITE : LCD_COLOR_BLACK;
-        }
-
-        BSP_LCD_SetBackColor(back_color);
-        snprintf(msg, 20, "T2 %dHz", TimFreq);              // TIM2 frequence
-        LCDdisplayText(5, text_color, msg);
-
-        snprintf(msg, 20, "%d", nbTIM2);                     // TIM2 cycles
-        LCDdisplayText(8, LCD_COLOR_GREEN, msg);
-
-        HAL_Delay(1000);                                     // Refresh = 1 second
-        TimFreq = nbTIM2 - prevTIM2;
-        prevTIM2 = nbTIM2;
-    }
+    return 0;
 }
 
 /* ******************************************************
  *      Callbacks
  * ******************************************************/
 
+/**
+ * @brief  TIM2 interrupt: counts the update events.
+ * @retval None
+ */
 void TIM2_IRQHandler(void)
 {
     if (__HAL_TIM_GET_ITSTATUS(&gTimHandle, TIM_IT_UPDATE))
@@ -68,10 +82,36 @@ void TIM2_IRQHandler(void)
     }
 }
 
+/**
+ * @brief  ADC interrupt: lets the HAL handle the end of conversion.
+ * @retval None
+ */
+void ADC_IRQHandler(void)
+{
+    HAL_ADC_IRQHandler(&gAdcHandle);
+}
+
+/**
+ * @brief  TIM7 interrupt: generates the servo control signal.
+ * @retval None
+ */
+void TIM7_IRQHandler(void)
+{
+    if (__HAL_TIM_GET_ITSTATUS(&gServoTimHandle, TIM_IT_UPDATE))
+    {
+        __HAL_TIM_CLEAR_IT(&gServoTimHandle, TIM_IT_UPDATE);
+        Servo_TimerUpdate();
+    }
+}
+
 /* ******************************************************
- *  Functions
+ *      Functions
  * ******************************************************/
 
+/**
+ * @brief  Initializes the HAL, the system clock and every device.
+ * @retval None
+ */
 void setup(void)
 {
     HAL_Init();
@@ -79,4 +119,6 @@ void setup(void)
     initLCD();
     initGPIO();
     initTimer();
+    initServoTimer();
+    initADC();
 }

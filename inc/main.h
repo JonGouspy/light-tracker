@@ -4,6 +4,7 @@
 void setup(void);
 void LCDdisplayInit(int version);
 void TIM2_IRQHandler(void);
+void TIM7_IRQHandler(void);
 void ADC_IRQHandler(void);
 
 #endif /* __MAIN_H */

@@ -1,71 +1,162 @@
-
 #include <stdbool.h>
 #include "stm32f4xx.h"
 #include "stm32f429i_discovery.h"
 #include "../Components/ili9341/ili9341.h"
 #include "devices.h"
 #include "main.h"
+#include "FreeRTOS.h"
+#include "task.h"
+#include "semphr.h"
+
+
+/* ******************************************************
+ *      Prototypes
+ * ******************************************************/
+
+void DisplayMsgScroll(char* msg);
 
 /* ******************************************************
  *      Global Context
  * ******************************************************/
 int cycle = 0;
-int nbTIM2 = 0;
+int nbIdle = 0;
+int nbTicks = 0;
+int currentLine = 3;
 
-/* ******************************************************
- *      Entry Point
- * ******************************************************/
+/*
+  * USE_MUTEX == 1 => sync is a mutex
+  * else sync is a binary semaphore
+  */
+#define USE_MUTEX 1
+
+SemaphoreHandle_t sync;
+
+TaskHandle_t HighT;
+TaskHandle_t MiddleT;
+TaskHandle_t LowT;
+
+static volatile double global = 10;
+
+void lowTask(void* arg)
+{
+        DisplayMsgScroll("LOW-takes");
+
+        // -TODO-  TAKE SEMAPHORE
+        xSemaphoreTake(sync, portMAX_DELAY);
+        //
+
+        xTaskNotifyGive(HighT);  // free HIGH
+        xTaskNotifyGive(MiddleT);// free MIDDLE
+
+        DisplayMsgScroll("LOW-release");  // allowed to run (again...)
+
+        // -TODO- RELEASE SEMAPHORE
+        xSemaphoreGive(sync);
+        //
+
+        for(;;);
+        {
+         vTaskDelay(1000);
+        }
+}
+
+void middleTask(void* arg)
+{
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(8000)); // WAIT SYNC FROM LOW
+        DisplayMsgScroll("MIDDLE-on");
+
+        // -TODO-  100% ACTIVITY
+        HAL_Delay(2000);
+        //
+
+        DisplayMsgScroll("MIDDLE-off");
+
+        for(;;)
+        {
+        	vTaskDelay(1000);
+        }
+}
+
+void highTask(void* arg)
+{
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(8000));// WAIT SYNC FROM LOW
+        vTaskDelay(pdMS_TO_TICKS(100));              // YIELD LOW (to sync MIDDLE)
+        DisplayMsgScroll("HIGH-ask");
+
+        // -TODO- TAKE SEMAPHORE
+        xSemaphoreTake(sync, portMAX_DELAY);
+        //
+
+        DisplayMsgScroll("HIGH-has");
+
+        for(;;)
+        {
+        	vTaskDelay(1000);
+        }
+}
 
 int main(void)
 {
-    /* Timer information */
-    char msg[20] = {0};
-    int prevTIM2 = 0;
-    int TimFreq = 0;
-
-    bool toggled = false;
-    uint32_t back_color = LCD_COLOR_LIGHTGRAY;
-    uint32_t text_color = LCD_COLOR_BLACK;
-
-    setup();                        // init devices
-
+    setup();
     LCDdisplayInit(COLORS_NORMAL);  // init display
 
-    for( ;; )
-    {
-        if (BSP_PB_GetState(BUTTON_KEY) != 0)
-        {
-            toggled = !toggled;
-            BSP_LED_Toggle(LED3);
-            LCDdisplayInit(toggled ? COLORS_REVERSE : COLORS_NORMAL);
-            back_color = toggled ? LCD_COLOR_DARKGRAY : LCD_COLOR_LIGHTGRAY;
-            text_color = toggled ? LCD_COLOR_WHITE : LCD_COLOR_BLACK;
-        }
+    // Semaphore / Mutex
+#ifdef USE_MUTEX
+    sync = xSemaphoreCreateMutex();
+#else
+    sync = xSemaphoreCreateBinary();
+    xSemaphoreGive(sync);
+#endif
 
-        BSP_LCD_SetBackColor(back_color);
-        snprintf(msg, 20, "T2 %dHz", TimFreq);              // TIM2 frequence
-        LCDdisplayText(5, text_color, msg);
+    xTaskCreate(lowTask,
+        "Low",
+        512,
+        (void*)1,
+        configMAX_PRIORITIES - 3,
+        &LowT);
 
-        snprintf(msg, 20, "%d", nbTIM2);                     // TIM2 cycles
-        LCDdisplayText(8, LCD_COLOR_GREEN, msg);
+    xTaskCreate(middleTask,
+        "Middle",
+        512,
+        (void*)2,
+        configMAX_PRIORITIES - 2,
+        &MiddleT);
 
-        HAL_Delay(1000);                                     // Refresh = 1 second
-        TimFreq = nbTIM2 - prevTIM2;
-        prevTIM2 = nbTIM2;
-    }
+    xTaskCreate(highTask,
+        "High",
+        512,
+        (void*)3,
+        configMAX_PRIORITIES - 1,
+        &HighT);
+
+
+    /* Start the scheduler */
+    vTaskStartScheduler();
+
+    return 0;
 }
 
 /* ******************************************************
- *      Callbacks
+ *  FreeRTOS
  * ******************************************************/
-
-void TIM2_IRQHandler(void)
+void vApplicationIdleHook()
 {
-    if (__HAL_TIM_GET_ITSTATUS(&gTimHandle, TIM_IT_UPDATE))
-    {
-        nbTIM2++;
-        __HAL_TIM_CLEAR_IT(&gTimHandle, TIM_IT_UPDATE);
-    }
+    nbIdle++;
+}
+
+void vApplicationTickHook()
+{
+    nbTicks++;
+}
+
+void DisplayMsgScroll(char* msg)
+{
+    uint32_t back_color = LCD_COLOR_LIGHTGRAY;
+    uint32_t text_color = LCD_COLOR_BLACK;
+
+    BSP_LCD_SetBackColor(back_color);
+    LCDdisplayText(currentLine, text_color, msg);
+    currentLine++;
 }
 
 /* ******************************************************
@@ -78,5 +169,4 @@ void setup(void)
     SystemClock_Config();
     initLCD();
     initGPIO();
-    initTimer();
 }

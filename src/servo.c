@@ -33,6 +33,36 @@ static uint32_t angleToPulseTicks(int32_t angle_deg)
     return pulse_us / TIMER_TICK_US;
 }
 
+#ifdef SERVO_TEST_SWEEP
+
+#define SWEEP_RANGE_DEG             45
+#define SWEEP_STEP_DEG              3
+
+/**
+ * @brief  Hardware test without the scheduler: sweeps the servo left and right forever.
+ *         One control pulse per SERVO_PERIOD_MS (HAL_Delay), the timer interrupt lowers the signal.
+ * @param  servo_ticks_up: pulse width in timer ticks, decremented by the timer interrupt
+ * @retval never returns
+ */
+void Servo_TestSweep(volatile uint32_t *servo_ticks_up)
+{
+	int32_t angle = -SWEEP_RANGE_DEG;
+	int32_t step = SWEEP_STEP_DEG;
+
+	for (;;)
+	{
+		*servo_ticks_up = angleToPulseTicks(angle);
+		BSP_LED_On(LED3);
+		HAL_Delay(SERVO_PERIOD_MS);
+
+		angle += step;
+		if (angle >= SWEEP_RANGE_DEG || angle <= -SWEEP_RANGE_DEG)
+			step = -step;
+	}
+}
+
+#endif /* SERVO_TEST_SWEEP */
+
 /**
  * @brief  Servo task, runs every SERVO_PERIOD_MS (vTaskDelayUntil).
  *         Writes the pulse width of the target angle, then raises the control

@@ -20,7 +20,7 @@
 #define ANGLE_MAX_DEG               (+80)
 
 /* Pulse */
-#define PULSE_CENTER_US             1000
+#define PULSE_CENTER_US             1500
 #define PULSE_PER_90DEG_US          500
 
 /* Timing */
@@ -28,5 +28,11 @@
 #define TIMER_TICK_US               10
 
 void vServoTask(void *pvParameters);
+
+#define SERVO_TEST_SWEEP
+
+#ifdef SERVO_TEST_SWEEP
+void Servo_TestSweep(volatile uint32_t *servo_ticks_up);
+#endif
 
 #endif /* SERVO_H_ */

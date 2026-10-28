@@ -21,6 +21,7 @@
 #include "automaton.h"
 #include "devices.h"
 #include "display.h"
+#include "servo.h"
 #include "utils.h"
 
 static const uint16_t EYE_X[2] = { 65, 175 };
@@ -114,7 +115,8 @@ void drawAnimation(DisplayMsg *msg, bool clear)
 }
 
 /**
- * @brief  Draws the debug mode: measures of both sensors, their gap and the servo angle.
+ * @brief  Draws the debug mode: measures of both sensors, their gap, the servo angle
+ *         and the pulse width sent to the servo.
  * @param  msg: state, measures and angle to display
  * @param  clear: true on entering the mode, to redraw the whole screen
  * @retval None
@@ -136,6 +138,9 @@ void drawDebug(DisplayMsg *msg, bool clear)
 	LCDdisplayText(4, LCD_COLOR_BLACK, line);
 	snprintf(line, sizeof line, "Angle  : %5ld°", (long)msg->angle);
 	LCDdisplayText(5, LCD_COLOR_BLACK, line);
+	int32_t pulse_us = PULSE_CENTER_US + clamp(msg->angle, ANGLE_MIN_DEG, ANGLE_MAX_DEG) * PULSE_PER_90DEG_US / 90;
+	snprintf(line, sizeof line, "Pulse : %4ld us", (long)pulse_us);
+	LCDdisplayText(6, LCD_COLOR_BLACK, line);
 }
 
 /**

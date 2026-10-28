@@ -65,6 +65,10 @@ int main(void)
     setup();
     LCDdisplayInit(COLORS_NORMAL);
 
+#ifdef SERVO_TEST_SWEEP
+    Servo_TestSweep(&servo_ticks_up);
+#endif
+
     gAutomaton.mq_display = xQueueCreate(MQ_DISPLAY_LENGTH, sizeof(DisplayMsg));
     gAutomaton.mq_event = xQueueCreate(MQ_EVENT_LENGTH, sizeof(Event));
     gAutomaton.target_angle = 0;

@@ -35,7 +35,7 @@ static uint32_t angleToPulseTicks(int32_t angle_deg)
 
 #ifdef SERVO_TEST_SWEEP
 
-#define SWEEP_RANGE_DEG             45
+#define SWEEP_RANGE_DEG             80
 #define SWEEP_STEP_DEG              3
 
 /**

@@ -170,7 +170,7 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
     }
     button_was_pressed = button_pressed;
 
-    if (abs(evt.diff - last_sent_diff) > LIGHT_CHANGE_THRESHOLD)
+    if (abs(evt.diff - last_sent_diff) > LIGHT_CHANGE_THRESHOLD || abs(evt.diff) > TRACKING_DEAD_ZONE)
     {
         evt.type = EVT_LIGHT;
         xQueueSendFromISR(gAutomaton.mq_event, &evt, &higher_priority_woken);

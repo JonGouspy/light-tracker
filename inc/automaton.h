@@ -20,8 +20,9 @@
 #define LIGHT_CHANGE_THRESHOLD      100
 
 /* Tracking */
-#define TRACKING_DEAD_ZONE          100
-#define TRACKING_GAIN_DIVISOR       100
+#define TRACKING_DEAD_ZONE          150
+#define TRACKING_GAIN_DIVISOR       150
+#define TRACKING_MAX_STEP_DEG       4
 #define TRACKING_DIRECTION          (+1)
 
 /* Event queue */

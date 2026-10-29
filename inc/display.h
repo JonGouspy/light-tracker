@@ -24,18 +24,28 @@
 
 /* Colors */
 #define SCREEN_BACKGROUND           LCD_COLOR_WHITE
-#define ANIM_BACKGROUND             LCD_COLOR_DARKBLUE
 
-/* Eyes */
-#define EYE_Y                       120
-#define EYE_RADIUS                  50
-#define PUPIL_RADIUS                18
-#define PUPIL_TRAVEL_PX             (EYE_RADIUS - PUPIL_RADIUS - 4)
+/* Debug screen */
+#define DBG_BACKGROUND              0xFF0D1B2A
+#define DBG_PANEL                   0xFF1B2B3F
+#define DBG_ACCENT                  0xFF00E5FF
+#define DBG_TEXT                    0xFFE0E6ED
+#define DBG_DIM                     0xFF7A8CA3
+#define DBG_LEFT                    0xFF00B4D8
+#define DBG_RIGHT                   0xFFFF8A3D
+#define GAUGE_CY                    120
+#define GAUGE_RADIUS                48
+#define GAUGE_NEEDLE_LEN            36
 
-/* Light bars */
-#define BAR_BOTTOM_Y                305
-#define BAR_MAX_HEIGHT              100
-#define BAR_WIDTH                   40
+/* Animation screen: sky, sun and sunflower */
+#define SKY_LEVELS                  6
+#define SKY_HEIGHT                  240
+#define SUN_Y                       50
+#define SUN_TRAVEL_PX               85
+#define FLOWER_X                    120
+#define FLOWER_Y                    175
+#define FLOWER_TRAVEL_PX            55
+#define FLOWER_STEP_PX              4
 
 typedef struct {
     State state;

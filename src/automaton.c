@@ -67,7 +67,11 @@ static void trackLight(int32_t diff)
 	if (abs(diff) <= TRACKING_DEAD_ZONE)
 		return;
 
-	int32_t angle = gAutomaton.target_angle + TRACKING_DIRECTION * diff / TRACKING_GAIN_DIVISOR;
+	int32_t step = TRACKING_DIRECTION * diff / TRACKING_GAIN_DIVISOR;
+	if (step == 0)
+		step = diff > 0 ? TRACKING_DIRECTION : -TRACKING_DIRECTION;
+	step = clamp(step, -TRACKING_MAX_STEP_DEG, TRACKING_MAX_STEP_DEG);
+	int32_t angle = gAutomaton.target_angle + step;
 	gAutomaton.target_angle = clamp(angle, ANGLE_MIN_DEG, ANGLE_MAX_DEG);
 }
 
@@ -118,7 +122,7 @@ void vAutomatonTask(void *unused)
 			state = nextState(state, &event);
 		}
 
-		if (state != STATE_STOP)
+		if (received && state != STATE_STOP)
 			trackLight(latest.diff);
 
 		if (received || gAutomaton.target_angle != previous_angle)

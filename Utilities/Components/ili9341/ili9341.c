@@ -173,7 +173,7 @@ void ili9341_Init(void)
   ili9341_WriteData(0xC2);
   ili9341_WriteReg(LCD_DFC);
   ili9341_WriteData(0x0A);
-  ili9341_WriteData(0xA7);
+  ili9341_WriteData(0xC7);
   ili9341_WriteData(0x27);
   ili9341_WriteData(0x04);
   
